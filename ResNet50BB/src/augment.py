@@ -11,6 +11,8 @@ class DataAug:
     """
     Saves the given image and modified XML tree (to have given bounding box) to the savedImgDir with the name given by newImgName
     """
+    if self.savedImgDir == None:
+      raise Exception("No save directory specified")
     tree = self.__editBBxml(tree, (xmin, ymin, xmax, ymax))
     name = newImgName.rpartition('/')[-1]
     cv2.imwrite(self.savedImgDir + name + IMAGE_EXTENSION, img)
@@ -26,8 +28,9 @@ class DataAug:
     ymin = int(root.find('object/bndbox/ymin').text)
     xmax = int(root.find('object/bndbox/xmax').text)
     ymax = int(root.find('object/bndbox/ymax').text)
+    label = str(root.find('object/name').text)
 
-    return xmin, ymin, xmax, ymax
+    return label, xmin, ymin, xmax, ymax
       
   def __editBBxml(self, tree, boundingBoxCoords):
     """
@@ -123,10 +126,13 @@ class DataAug:
     """
     h, w, _ = img.shape
 
-    x1, x3 = np.random.randint(0, xmin + (xmax-xmin)//4, size=2)
-    x2, x4 = np.random.randint(xmax - (xmax-xmin)//4, w, size=2)
-    y3, y4 = np.random.randint(0, ymin + (ymax-ymin)//4, size=2)
-    y1, y2 = np.random.randint(ymax - (ymax-ymin)//4, h, size=2)
+    bbWidth =  xmax-xmin
+    bbHeight =  ymax-ymin
+
+    x1, x3 = np.random.randint(max(0, xmin - 2 * bbWidth), xmin + bbWidth//4, size=2)
+    x2, x4 = np.random.randint(xmax - bbWidth//4, min(w, xmax + 2 * bbWidth), size=2)
+    y3, y4 = np.random.randint(max(0, ymin - 2 * bbHeight), ymin + bbHeight//4, size=2)
+    y1, y2 = np.random.randint(ymax - bbHeight//4, min(h, ymax + 2 * bbHeight), size=2)
 
     pts1 = np.float32([[x1, y1], [x2, y2],[x3, y3], [x4, y4]])
     pts2 = np.float32([[0, h], [w, h], [0, 0], [w, 0]])
@@ -179,7 +185,7 @@ class DataAug:
     """
     contrast = np.clip(np.interp(contrast, [0,2], [.5,1.5]), .5, 1.5)
     saturation = np.clip(np.interp(saturation, [0,2], [.5,1.5]), .5, 1.5)
-    luminance = np.clip(np.interp(luminance, [0,2], [-25, 25]),-25, 25)
+    luminance = np.clip(np.interp(luminance, [0,2], [-50, 50]),-50, 50)
 
     luminance += int(round(255*(1-contrast)/2))
     img = cv2.addWeighted(img, contrast, img, 0, luminance)
@@ -205,7 +211,7 @@ class DataAug:
   addNoise.name = 'noise'
   addNoise.isGeometric = False
 
-  def applyAug(self, imgName, funcs, params, saveImg=False):
+  def applyAug(self, imgName, funcs, params, saveImg=True):
     """
     Applys the specified image transformation(s) to the given file and returns the image and bounding box as a tuple: img, xmin, ymin, xmax, ymax
 
@@ -216,7 +222,7 @@ class DataAug:
     """
     img = cv2.imread(imgName + IMAGE_EXTENSION)
     tree = et.parse(imgName + '.xml')
-    xmin, ymin, xmax, ymax = self.__getBB(tree)
+    label, xmin, ymin, xmax, ymax = self.__getBB(tree)
 
     mods = ''
 
@@ -236,4 +242,4 @@ class DataAug:
     if saveImg:
         self.__saveImg(img, tree, imgName + mods, xmin, ymin, xmax, ymax)
     
-    return img, xmin, ymin, xmax, ymax
+    return img, label, xmin, ymin, xmax, ymax

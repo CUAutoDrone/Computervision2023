@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import xml.etree.ElementTree as et
 import torchvision.transforms as transforms
-from config import TRAIN_DIR, MAX_AUGMENTATIONS, AUGMENT_DIR, IMAGE_EXTENSION, RESIZE_TO_X, RESIZE_TO_Y, VALIDATION_DIR, BATCH_SIZE, CLASSES
+from config import TRAIN_DIR, MAX_AUGMENTATIONS, AUGMENT_SAVE_DIR, IMAGE_EXTENSION, RESIZE_TO_X, RESIZE_TO_Y, VALIDATION_DIR, BATCH_SIZE, CLASSES, AUGMENTED_DIR
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image, ImageDraw
 from augment import DataAug
@@ -43,7 +43,7 @@ def augmentData(data_names):
     bimodal = lambda : 1 + (np.random.choice([-1, 1]) * np.random.uniform(0.25,1))
     choose = lambda lst, number : [lst[i] for i in np.random.permutation( range(len(lst)) )[:number]]
 
-    AugmentationManager = DataAug(savedImgDir=AUGMENT_DIR)
+    AugmentationManager = DataAug(savedImgDir=AUGMENT_SAVE_DIR)
     augment = {
         AugmentationManager.rotateImg         : lambda : (np.random.choice([-1, 1]) * np.random.randint(5,25),),
         AugmentationManager.randomCrop        : lambda : (),
@@ -119,8 +119,14 @@ valid_names = getNames(VALIDATION_DIR)
 train_data = getImgBB(train_names)
 valid_data = getImgBB(valid_names)
 
-for data in augmentData(train_names):
-    train_data.append(data)
+
+if AUGMENTED_DIR == None:
+    for data in augmentData(train_names):
+        train_data.append(data)
+else:
+    augment_names = getNames(AUGMENTED_DIR)
+    for data in getImgBB(augment_names):
+        train_data.append(data)
 
 train_data = regularizeData(train_data)
 valid_data = regularizeData(valid_data)
@@ -148,16 +154,25 @@ print(f"Number of training samples: {len(train_data)}")
 print(f"Number of validation samples: {len(valid_data)}\n")
 
 if __name__ == '__main__':
-    file_out = './bbs/'
+    train_names = getNames(TRAIN_DIR)
 
-    for filename in os.listdir(AUGMENT_DIR):
+    train_data = getImgBB(train_names)
+
+    augmentData(train_names)
+    
+
+
+    file_out = './bbs/'
+    if file_out == None:
+        quit()
+    for filename in os.listdir(AUGMENT_SAVE_DIR):
         if filename.endswith('.png'):
             name_without_extension = os.path.splitext(filename)[0]
             # Load the PNG image
-            image = Image.open(AUGMENT_DIR + name_without_extension + '.png')
+            image = Image.open(AUGMENT_SAVE_DIR + name_without_extension + IMAGE_EXTENSION)
 
             # Load the XML file and extract the bounding box coordinates
-            tree = et.parse(AUGMENT_DIR + name_without_extension + '.xml')
+            tree = et.parse(AUGMENT_SAVE_DIR + name_without_extension + '.xml')
             root = tree.getroot()
             xmin = int(root.find('object/bndbox/xmin').text)
             ymin = int(root.find('object/bndbox/ymin').text)
@@ -169,4 +184,4 @@ if __name__ == '__main__':
             draw.rectangle((xmin, ymin, xmax, ymax), outline='red', width=3)
 
             # Show the image with the bounding box
-            image.save(file_out + name_without_extension + '.png')
+            image.save(file_out + name_without_extension + IMAGE_EXTENSION)
